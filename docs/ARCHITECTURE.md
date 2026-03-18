@@ -1,6 +1,8 @@
 ### How are the layers organised and what are the dependency rules between them?
 
-nopCommerce follows an [onion architecture](https://docs.nopcommerce.com/en/developer/tutorials/architecture-of-nopCommerce.html). Each project can reference any inner layer (not just the one directly below it), but never an outer one. In practice, the codebase also maintains the convention that no plugin references another plugin.
+nopCommerce closely follows an [onion architecture](https://docs.nopcommerce.com/en/developer/tutorials/architecture-of-nopCommerce.html), but not strictly. Dependencies only point inward (never outward), however outer layers can reference any inner layer directly, not just the adjacent one.
+
+Additionally, none of the built-in plugins reference another plugin, as observed from the codebase. However, this may not be considered a rule, since the framework supports inter-plugin dependencies through the [`DependsOnSystemNames` field in `plugin.json`](https://docs.nopcommerce.com/en/developer/plugins/plugin.json.html).
 
 ![nopCommerce Architecture](nopCommerceArchitecture.png)
 
