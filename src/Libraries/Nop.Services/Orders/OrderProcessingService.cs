@@ -1,6 +1,8 @@
-﻿using System.Globalization;
+﻿using System.Diagnostics;
+using System.Globalization;
 using Newtonsoft.Json;
 using Nop.Core;
+using Nop.Core.Infrastructure.Instrumentation;
 using Nop.Core.Caching;
 using Nop.Core.Domain.Catalog;
 using Nop.Core.Domain.Common;
@@ -338,6 +340,8 @@ public partial class OrderProcessingService : IOrderProcessingService
     /// <exception cref="NopException">Validation problems</exception>
     protected virtual async Task PrepareAndValidateTotalsAsync(PlaceOrderContainer details, ProcessPaymentRequest processPaymentRequest)
     {
+        using var activity = NopInstrumentation.ActivitySource.StartActivity("order.validate_totals");
+
         var (discountAmountInclTax, discountAmountExclTax, appliedDiscounts, subTotalWithoutDiscountInclTax,
                 subTotalWithoutDiscountExclTax, _, _, _) =
             await _orderTotalCalculationService.GetShoppingCartSubTotalsAsync(details.Cart);
@@ -717,6 +721,8 @@ public partial class OrderProcessingService : IOrderProcessingService
     protected virtual async Task<Order> SaveOrderDetailsAsync(ProcessPaymentRequest processPaymentRequest,
         ProcessPaymentResult processPaymentResult, PlaceOrderContainer details)
     {
+        using var activity = NopInstrumentation.ActivitySource.StartActivity("order.save");
+
         var order = new Order
         {
             StoreId = processPaymentRequest.StoreId,
@@ -1329,9 +1335,22 @@ public partial class OrderProcessingService : IOrderProcessingService
             //gift cards
             await AddGiftCardsAsync(product, sc.AttributesXml, sc.Quantity, orderItem, scUnitPriceExclTax.price);
 
-            //inventory
-            await _productService.AdjustInventoryAsync(product, -sc.Quantity, sc.AttributesXml,
-                string.Format(await _localizationService.GetResourceAsync("Admin.StockQuantityHistory.Messages.PlaceOrder"), order.Id));
+            //inventory (instrumented: span + Metric 2 - inventory adjustment failure per product)
+            try
+            {
+                using var inventoryActivity = NopInstrumentation.ActivitySource.StartActivity("inventory.adjust");
+                inventoryActivity?.SetTag("product.id", product.Id);
+
+                await _productService.AdjustInventoryAsync(product, -sc.Quantity, sc.AttributesXml,
+                    string.Format(await _localizationService.GetResourceAsync("Admin.StockQuantityHistory.Messages.PlaceOrder"), order.Id));
+            }
+            catch (Exception ex)
+            {
+                inventoryActivity?.SetStatus(ActivityStatusCode.Error, ex.GetType().Name);
+                NopInstrumentation.InventoryAdjustmentFailures.Add(1,
+                    new KeyValuePair<string, object?>("product.id", product.Id));
+                throw;
+            }
 
             await _eventPublisher.PublishAsync(new ShoppingCartItemMovedToOrderItemEvent(sc, orderItem));
         }
@@ -1387,6 +1406,9 @@ public partial class OrderProcessingService : IOrderProcessingService
     /// </returns>
     protected virtual async Task<ProcessPaymentResult> GetProcessPaymentResultAsync(ProcessPaymentRequest processPaymentRequest, PlaceOrderContainer details)
     {
+        using var activity = NopInstrumentation.ActivitySource.StartActivity("payment.process");
+        activity?.SetTag("payment.method", processPaymentRequest.PaymentMethodSystemName);
+
         //process payment
         ProcessPaymentResult processPaymentResult;
         //check if is payment workflow required
@@ -1400,6 +1422,9 @@ public partial class OrderProcessingService : IOrderProcessingService
             //ensure that payment method is active
             if (!_paymentPluginManager.IsPluginActive(paymentMethod))
                 throw new NopException("Payment method is not active");
+
+            //instrumented: Metric 1 - payment gateway latency
+            var paymentStopwatch = Stopwatch.StartNew();
 
             if (details.IsRecurringShoppingCart)
             {
@@ -1415,6 +1440,13 @@ public partial class OrderProcessingService : IOrderProcessingService
             else
                 //standard cart
                 processPaymentResult = await _paymentService.ProcessPaymentAsync(processPaymentRequest);
+
+            paymentStopwatch.Stop();
+            NopInstrumentation.PaymentGatewayDuration.Record(
+                paymentStopwatch.Elapsed.TotalMilliseconds,
+                new KeyValuePair<string, object?>("payment.method", processPaymentRequest.PaymentMethodSystemName));
+
+            activity?.SetTag("payment.success", processPaymentResult.Success);
         }
         else
             //payment is not required
@@ -1566,6 +1598,8 @@ public partial class OrderProcessingService : IOrderProcessingService
     /// </returns>
     public virtual async Task<PlaceOrderResult> PlaceOrderAsync(ProcessPaymentRequest processPaymentRequest)
     {
+        using var orderActivity = NopInstrumentation.ActivitySource.StartActivity("order.place");
+
         ArgumentNullException.ThrowIfNull(processPaymentRequest);
 
         if (processPaymentRequest.OrderGuid == Guid.Empty)
@@ -1590,6 +1624,8 @@ public partial class OrderProcessingService : IOrderProcessingService
                         placeOrderContainer);
                     result.PlacedOrder = order;
 
+                    orderActivity?.SetTag("order.id", order.Id);
+
                     //move shopping cart items to order items
                     await MoveShoppingCartItemsToOrderItemsAsync(placeOrderContainer, order);
 
@@ -1613,8 +1649,11 @@ public partial class OrderProcessingService : IOrderProcessingService
                         string.Format(await _localizationService.GetResourceAsync("ActivityLog.PublicStore.PlaceOrder"),
                             order.Id), order);
 
-                    //raise event       
+                    //raise event (instrumented: Metric 3 - event dispatch duration)
+                    var eventStopwatch = Stopwatch.StartNew();
                     await _eventPublisher.PublishAsync(new OrderPlacedEvent(order));
+                    eventStopwatch.Stop();
+                    NopInstrumentation.EventDispatchDuration.Record(eventStopwatch.Elapsed.TotalMilliseconds);
 
                     //check order status
                     await CheckOrderStatusAsync(order);

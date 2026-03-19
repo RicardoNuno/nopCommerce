@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Nop.Core;
 using Nop.Core.Domain.Common;
@@ -9,6 +10,7 @@ using Nop.Core.Domain.Security;
 using Nop.Core.Domain.Shipping;
 using Nop.Core.Domain.Tax;
 using Nop.Core.Http;
+using Nop.Core.Infrastructure.Instrumentation;
 using Nop.Services.Attributes;
 using Nop.Services.Catalog;
 using Nop.Services.Common;
@@ -1277,6 +1279,8 @@ public partial class CheckoutController : BasePublicController
     [HttpPost, ActionName("Confirm")]
     public virtual async Task<IActionResult> ConfirmOrder(bool captchaValid)
     {
+        using var activity = NopInstrumentation.ActivitySource.StartActivity("checkout.confirm");
+
         //validation
         if (_orderSettings.CheckoutDisabled)
             return RedirectToRoute(NopRouteNames.General.CART);
@@ -1332,6 +1336,9 @@ public partial class CheckoutController : BasePublicController
             var placeOrderResult = await _orderProcessingService.PlaceOrderAsync(processPaymentRequest);
             if (placeOrderResult.Success)
             {
+                activity?.SetTag("order.id", placeOrderResult.PlacedOrder.Id);
+                activity?.SetStatus(ActivityStatusCode.Ok);
+
                 await _orderProcessingService.SetProcessPaymentRequestAsync(null);
 
                 var postProcessPaymentRequest = new PostProcessPaymentRequest
@@ -1349,11 +1356,13 @@ public partial class CheckoutController : BasePublicController
                 return RedirectToRoute(NopRouteNames.Standard.CHECKOUT_COMPLETED, new { orderId = placeOrderResult.PlacedOrder.Id });
             }
 
+            activity?.SetStatus(ActivityStatusCode.Error, "Order placement failed");
             foreach (var error in placeOrderResult.Errors)
                 model.Warnings.Add(error);
         }
         catch (Exception exc)
         {
+            activity?.SetStatus(ActivityStatusCode.Error, exc.GetType().Name);
             await _logger.WarningAsync(exc.Message, exc);
             model.Warnings.Add(exc.Message);
         }

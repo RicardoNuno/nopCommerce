@@ -1,4 +1,4 @@
-### How are the layers organised and what are the dependency rules between them?
+## How are the layers organised and what are the dependency rules between them?
 
 nopCommerce closely follows an [onion architecture](https://docs.nopcommerce.com/en/developer/tutorials/architecture-of-nopCommerce.html), but not strictly. Dependencies only point inward (never outward). However, outer layers can reference any inner layer directly, not just the adjacent one.
 
@@ -28,7 +28,7 @@ The dependency rules are enforced through project references in the `.csproj` fi
 
 Additionally, none of the built-in plugins reference another plugin, as observed from the codebase. However, this may not be considered a rule, since the framework supports inter-plugin dependencies through the [`DependsOnSystemNames` field in `plugin.json`](https://docs.nopcommerce.com/en/developer/plugins/plugin.json.html).
 
-### How does nopCommerce handle events internally — what is IEventPublisher and how is it used?
+## How does nopCommerce handle events internally — what is IEventPublisher and how is it used?
 
 Before covering events, it helps to understand how nopCommerce wires its dependencies. nopCommerce uses [Inversion of Control (IoC) through dependency injection](https://docs.nopcommerce.com/en/developer/tutorials/inversion-of-control.html) based on ASP.NET Core's built-in DI container. Services are registered in classes implementing the `INopStartup` interface (defined in Nop.Core), using the standard `IServiceCollection`. These implementations exist across the solution and are discovered automatically at startup.
 
@@ -61,7 +61,7 @@ Other events are published explicitly by services and framework code, such as `A
 - In-process only: there is no message broker or external queue. Events do not cross process boundaries.
 - Error isolation: a failing consumer does not prevent other consumers from running. Errors are logged with a nested try-catch to avoid cyclic failures (since the logger itself could trigger events).
 
-### Where does the code make it easy to add observability, and where does it make it hard?
+## Where does the code make it easy to add observability, and where does it make it hard?
 
 The onion layer structure works in favour of instrumentation: since all layers depend inward, any observability abstraction placed in an inner layer (e.g., a tracing interface in Nop.Core) is automatically available to every outer layer without adding new dependencies.
 
@@ -89,7 +89,7 @@ The onion layer structure works in favour of instrumentation: since all layers d
 
 5. **Plugin isolation.** Each plugin manages its own HTTP clients and error handling independently. There is no shared observability contract, so a plugin's external calls (payment gateways, tax services) may not surface consistently in logs or metrics.
 
-### What would you need to change structurally to instrument it properly — and is that change worth making?
+## What would you need to change structurally to instrument it properly — and is that change worth making?
 
 The seams identified above (middleware, event consumers, DI interfaces, `IHttpClientFactory`) can be instrumented today without structural changes. For comprehensive instrumentation (structured logs, end-to-end tracing, unified metrics), three areas of the codebase would need to change:
 
