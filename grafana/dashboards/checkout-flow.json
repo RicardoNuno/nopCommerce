@@ -1,0 +1,129 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Payment Gateway Latency (p50 / p95 / p99)",
+      "description": "Metric 1: Duration of payment gateway calls during checkout. A climbing p95 indicates the payment provider is degrading before users see timeouts.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(nopcommerce_checkout_payment_gateway_duration_bucket[5m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(nopcommerce_checkout_payment_gateway_duration_bucket[5m]))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(nopcommerce_checkout_payment_gateway_duration_bucket[5m]))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "title": "Inventory Adjustment Failures (by product)",
+      "description": "Metric 2: Count of inventory adjustment failures per product. A spike means a product's stock update is failing after payment was already taken.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "bars", "fillOpacity": 80 }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "increase(nopcommerce_checkout_inventory_adjustment_failures_total[5m])",
+          "legendFormat": "Product {{product_id}}"
+        }
+      ]
+    },
+    {
+      "title": "Event Dispatch Duration (OrderPlacedEvent)",
+      "description": "Metric 3: Time spent dispatching OrderPlacedEvent to all consumers. A climbing value means a consumer is slowing down the checkout response.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(nopcommerce_checkout_event_dispatch_duration_bucket[5m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(nopcommerce_checkout_event_dispatch_duration_bucket[5m]))",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "title": "Checkout Error Rate",
+      "description": "Percentage of checkout HTTP requests that resulted in an error (5xx responses). Derived from ASP.NET Core auto-instrumentation.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.01 },
+              { "color": "red", "value": 0.05 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_request_duration_seconds_count{http_route=\"/checkout/confirm\", http_response_status_code=~\"5..\"}[5m])) / sum(rate(http_server_request_duration_seconds_count{http_route=\"/checkout/confirm\"}[5m]))",
+          "legendFormat": "Error rate"
+        }
+      ]
+    },
+    {
+      "title": "Checkout Flow Traces",
+      "description": "Distributed traces for the checkout flow. Click a trace to see the full span hierarchy from HTTP entry point through payment, inventory, and event dispatch.",
+      "type": "traces",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 16 },
+      "datasource": { "type": "jaeger", "uid": "jaeger" },
+      "targets": [
+        {
+          "query": "NopCommerce.Checkout",
+          "service": "NopCommerce"
+        }
+      ]
+    }
+  ],
+  "title": "nopCommerce Checkout Flow",
+  "uid": "nopcommerce-checkout",
+  "version": 1,
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "10s"
+}

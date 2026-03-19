@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'nopcommerce'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['nopcommerce:80']

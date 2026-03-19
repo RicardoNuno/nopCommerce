@@ -1336,11 +1336,10 @@ public partial class OrderProcessingService : IOrderProcessingService
             await AddGiftCardsAsync(product, sc.AttributesXml, sc.Quantity, orderItem, scUnitPriceExclTax.price);
 
             //inventory (instrumented: span + Metric 2 - inventory adjustment failure per product)
+            using var inventoryActivity = NopInstrumentation.ActivitySource.StartActivity("inventory.adjust");
+            inventoryActivity?.SetTag("product.id", product.Id);
             try
             {
-                using var inventoryActivity = NopInstrumentation.ActivitySource.StartActivity("inventory.adjust");
-                inventoryActivity?.SetTag("product.id", product.Id);
-
                 await _productService.AdjustInventoryAsync(product, -sc.Quantity, sc.AttributesXml,
                     string.Format(await _localizationService.GetResourceAsync("Admin.StockQuantityHistory.Messages.PlaceOrder"), order.Id));
             }

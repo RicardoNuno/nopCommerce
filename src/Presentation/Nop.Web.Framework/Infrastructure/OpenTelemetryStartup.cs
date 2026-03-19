@@ -28,19 +28,27 @@ public partial class OpenTelemetryStartup : INopStartup
             .WithTracing(tracing => tracing
                 .AddSource(NopInstrumentation.ActivitySourceName)
                 .AddAspNetCoreInstrumentation()
+                .AddOtlpExporter(opts =>
+                {
+                    opts.Endpoint = new System.Uri(
+                        configuration["OpenTelemetry:TracesEndpoint"] ?? "http://jaeger:4317");
+                })
                 .AddConsoleExporter())
             .WithMetrics(metrics => metrics
                 .AddMeter(NopInstrumentation.MeterName)
                 .AddAspNetCoreInstrumentation()
+                .AddPrometheusExporter()
                 .AddConsoleExporter());
     }
 
     /// <summary>
-    /// Configure the using of added middleware
+    /// Configure the using of added middleware.
+    /// Maps the /metrics endpoint for Prometheus scraping.
     /// </summary>
     /// <param name="application">Builder for configuring an application's request pipeline</param>
     public virtual void Configure(IApplicationBuilder application)
     {
+        application.UseOpenTelemetryPrometheusScrapingEndpoint();
     }
 
     /// <summary>
