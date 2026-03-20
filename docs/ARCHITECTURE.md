@@ -57,7 +57,7 @@ Other events are published explicitly by services and framework code, such as `A
 
 **Key characteristics:**
 
-- Synchronous dispatch: consumers run sequentially within the calling thread, not in parallel or on a background queue. A slow consumer blocks the publisher.
+- Sequential dispatch: consumers are awaited one after another, not in parallel or on a background queue. Although the calls are asynchronous (`await HandleEventAsync`), each consumer must complete before the next one starts. A slow consumer blocks the publisher.
 - In-process only: there is no message broker or external queue. Events do not cross process boundaries.
 - Error isolation: a failing consumer does not prevent other consumers from running. Errors are logged with a nested try-catch to avoid cyclic failures (since the logger itself could trigger events).
 
