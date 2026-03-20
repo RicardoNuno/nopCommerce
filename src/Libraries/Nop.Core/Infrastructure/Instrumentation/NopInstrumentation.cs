@@ -16,7 +16,29 @@ public static class NopInstrumentation
     public static readonly Meter Meter = new(MeterName);
 
     /// <summary>
-    /// Metric 1: Payment gateway latency (histogram).
+    /// Metric 1: Orders completed (counter).
+    /// Incremented when PlaceOrderAsync() finishes, tagged by success/failure and failure reason.
+    /// This is the primary on-call signal: "are orders going through?"
+    /// </summary>
+    public static readonly Counter<long> OrdersCompleted =
+        Meter.CreateCounter<long>(
+            "nopcommerce.checkout.orders.completed",
+            unit: "{order}",
+            description: "Orders completed during checkout, tagged by outcome");
+
+    /// <summary>
+    /// Metric 2: Orders in flight (up-down counter).
+    /// Incremented when PlaceOrderAsync() starts, decremented when it exits.
+    /// A rising value under load indicates orders are piling up (saturation).
+    /// </summary>
+    public static readonly UpDownCounter<long> OrdersInFlight =
+        Meter.CreateUpDownCounter<long>(
+            "nopcommerce.checkout.orders.in_flight",
+            unit: "{order}",
+            description: "Orders currently being processed in the checkout pipeline");
+
+    /// <summary>
+    /// Metric 3: Payment gateway latency (histogram).
     /// Records the duration of each PaymentService.ProcessPaymentAsync() call in milliseconds.
     /// Tagged by payment method system name.
     /// </summary>
@@ -27,18 +49,7 @@ public static class NopInstrumentation
             description: "Duration of payment gateway calls during checkout");
 
     /// <summary>
-    /// Metric 2: Inventory adjustment failure rate per product (counter).
-    /// Incremented when ProductService.AdjustInventoryAsync() fails during order item processing.
-    /// Tagged by product ID.
-    /// </summary>
-    public static readonly Counter<long> InventoryAdjustmentFailures =
-        Meter.CreateCounter<long>(
-            "nopcommerce.checkout.inventory_adjustment.failures",
-            unit: "{failure}",
-            description: "Number of inventory adjustment failures during checkout, per product");
-
-    /// <summary>
-    /// Metric 3: Event dispatch duration (histogram).
+    /// Metric 4: Event dispatch duration (histogram).
     /// Records the duration of publishing OrderPlacedEvent in milliseconds.
     /// </summary>
     public static readonly Histogram<double> EventDispatchDuration =

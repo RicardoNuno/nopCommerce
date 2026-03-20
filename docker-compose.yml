@@ -52,5 +52,16 @@ services:
             - prometheus
             - jaeger
 
+    k6:
+        image: grafana/k6:latest
+        container_name: k6
+        volumes:
+            - ./loadtest:/scripts
+        entrypoint: ["k6", "run", "/scripts/checkout-flow.js"]
+        depends_on:
+            - nopcommerce_web
+        profiles:
+            - loadtest
+
 volumes:
   nopcommerce_data:

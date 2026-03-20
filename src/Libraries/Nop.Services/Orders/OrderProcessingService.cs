@@ -1335,21 +1335,11 @@ public partial class OrderProcessingService : IOrderProcessingService
             //gift cards
             await AddGiftCardsAsync(product, sc.AttributesXml, sc.Quantity, orderItem, scUnitPriceExclTax.price);
 
-            //inventory (instrumented: span + Metric 2 - inventory adjustment failure per product)
+            //inventory
             using var inventoryActivity = NopInstrumentation.ActivitySource.StartActivity("inventory.adjust");
             inventoryActivity?.SetTag("product.id", product.Id);
-            try
-            {
-                await _productService.AdjustInventoryAsync(product, -sc.Quantity, sc.AttributesXml,
-                    string.Format(await _localizationService.GetResourceAsync("Admin.StockQuantityHistory.Messages.PlaceOrder"), order.Id));
-            }
-            catch (Exception ex)
-            {
-                inventoryActivity?.SetStatus(ActivityStatusCode.Error, ex.GetType().Name);
-                NopInstrumentation.InventoryAdjustmentFailures.Add(1,
-                    new KeyValuePair<string, object?>("product.id", product.Id));
-                throw;
-            }
+            await _productService.AdjustInventoryAsync(product, -sc.Quantity, sc.AttributesXml,
+                string.Format(await _localizationService.GetResourceAsync("Admin.StockQuantityHistory.Messages.PlaceOrder"), order.Id));
 
             await _eventPublisher.PublishAsync(new ShoppingCartItemMovedToOrderItemEvent(sc, orderItem));
         }
@@ -1422,7 +1412,7 @@ public partial class OrderProcessingService : IOrderProcessingService
             if (!_paymentPluginManager.IsPluginActive(paymentMethod))
                 throw new NopException("Payment method is not active");
 
-            //instrumented: Metric 1 - payment gateway latency
+            //instrumented: Metric 3 - payment gateway latency
             var paymentStopwatch = Stopwatch.StartNew();
 
             if (details.IsRecurringShoppingCart)
@@ -1598,6 +1588,7 @@ public partial class OrderProcessingService : IOrderProcessingService
     public virtual async Task<PlaceOrderResult> PlaceOrderAsync(ProcessPaymentRequest processPaymentRequest)
     {
         using var orderActivity = NopInstrumentation.ActivitySource.StartActivity("order.place");
+        NopInstrumentation.OrdersInFlight.Add(1);
 
         ArgumentNullException.ThrowIfNull(processPaymentRequest);
 
@@ -1648,7 +1639,7 @@ public partial class OrderProcessingService : IOrderProcessingService
                         string.Format(await _localizationService.GetResourceAsync("ActivityLog.PublicStore.PlaceOrder"),
                             order.Id), order);
 
-                    //raise event (instrumented: Metric 3 - event dispatch duration)
+                    //raise event (instrumented: Metric 4 - event dispatch duration)
                     var eventStopwatch = Stopwatch.StartNew();
                     await _eventPublisher.PublishAsync(new OrderPlacedEvent(order));
                     eventStopwatch.Stop();
@@ -1687,46 +1678,72 @@ public partial class OrderProcessingService : IOrderProcessingService
             return result;
         }
 
-        if (!_orderSettings.PlaceOrderWithLock)
-            return await placeOrder(details);
-
-        PlaceOrderResult result;
-        var resource = details.Customer.Id.ToString();
-
-        //the named mutex helps to avoid creating the same order in different threads,
-        //and does not decrease performance significantly, because the code is blocked only for the specific cart.
-        //you should be very careful, mutexes cannot be used in with the await operation
-        //we can't use semaphore here, because it produces PlatformNotSupportedException exception on UNIX based systems
-        using var mutex = new Mutex(false, resource);
-
-        mutex.WaitOne();
-
         try
         {
-            var cacheKey = _staticCacheManager.PrepareKey(NopOrderDefaults.OrderWithLockCacheKey, resource);
-            cacheKey.CacheTime = _orderSettings.MinimumOrderPlacementInterval;
+            PlaceOrderResult orderResult;
 
-            var exist = _staticCacheManager.GetAsync(cacheKey, () => false).Result;
-
-            if (exist)
+            if (!_orderSettings.PlaceOrderWithLock)
             {
-                result = new PlaceOrderResult();
-                result.Errors.Add(_localizationService.GetResourceAsync("Checkout.MinOrderPlacementInterval").Result);
+                orderResult = await placeOrder(details);
             }
             else
             {
-                result = placeOrder(details).Result;
+                var resource = details.Customer.Id.ToString();
 
-                if (result.Success)
-                    _staticCacheManager.SetAsync(cacheKey, true).Wait();
+                //the named mutex helps to avoid creating the same order in different threads,
+                //and does not decrease performance significantly, because the code is blocked only for the specific cart.
+                //you should be very careful, mutexes cannot be used in with the await operation
+                //we can't use semaphore here, because it produces PlatformNotSupportedException exception on UNIX based systems
+                using var mutex = new Mutex(false, resource);
+
+                mutex.WaitOne();
+
+                try
+                {
+                    var cacheKey = _staticCacheManager.PrepareKey(NopOrderDefaults.OrderWithLockCacheKey, resource);
+                    cacheKey.CacheTime = _orderSettings.MinimumOrderPlacementInterval;
+
+                    var exist = _staticCacheManager.GetAsync(cacheKey, () => false).Result;
+
+                    if (exist)
+                    {
+                        orderResult = new PlaceOrderResult();
+                        orderResult.Errors.Add(_localizationService.GetResourceAsync("Checkout.MinOrderPlacementInterval").Result);
+                    }
+                    else
+                    {
+                        orderResult = placeOrder(details).Result;
+
+                        if (orderResult.Success)
+                            _staticCacheManager.SetAsync(cacheKey, true).Wait();
+                    }
+                }
+                finally
+                {
+                    mutex.ReleaseMutex();
+                }
             }
+
+            //instrumented: Metric 1 - orders completed counter
+            if (orderResult.Success)
+            {
+                NopInstrumentation.OrdersCompleted.Add(1,
+                    new KeyValuePair<string, object?>("status", "success"));
+            }
+            else
+            {
+                NopInstrumentation.OrdersCompleted.Add(1,
+                    new KeyValuePair<string, object?>("status", "failure"),
+                    new KeyValuePair<string, object?>("failure_reason", orderResult.Errors.FirstOrDefault() ?? "unknown"));
+            }
+
+            return orderResult;
         }
         finally
         {
-            mutex.ReleaseMutex();
+            //instrumented: Metric 2 - orders in flight gauge
+            NopInstrumentation.OrdersInFlight.Add(-1);
         }
-
-        return result;
     }
 
     /// <summary>
