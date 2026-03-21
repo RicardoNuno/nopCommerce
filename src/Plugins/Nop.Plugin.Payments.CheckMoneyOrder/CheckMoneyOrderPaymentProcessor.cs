@@ -57,6 +57,14 @@ public class CheckMoneyOrderPaymentProcessor : BasePlugin, IPaymentMethod
     /// </returns>
     public Task<ProcessPaymentResult> ProcessPaymentAsync(ProcessPaymentRequest processPaymentRequest)
     {
+        // // Simulate ~50% payment gateway failures for observability testing
+        // if (Random.Shared.Next(2) == 0)
+        // {
+        //     var result = new ProcessPaymentResult();
+        //     result.AddError("Simulated payment gateway failure");
+        //     return Task.FromResult(result);
+        // }
+
         return Task.FromResult(new ProcessPaymentResult());
     }
 

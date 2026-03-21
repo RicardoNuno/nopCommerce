@@ -133,20 +133,22 @@
       ]
     },
     {
-      "title": "HTTP-level errors and traces",
+      "title": "Error rate",
       "type": "row",
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
       "collapsed": false
     },
     {
-      "title": "Checkout Error Rate (HTTP 5xx)",
-      "description": "Percentage of checkout HTTP requests returning 5xx. Complements the business-level Orders Completed panel: this catches infrastructure failures (app crashes, timeouts), while Orders Completed catches business failures (payment declined, validation errors).",
+      "title": "Checkout Error Rate",
+      "description": "Percentage of order placements that fail. Computed from the business-level orders completed counter (Metric 1). A rising error rate means checkout is degrading — drill into traces or the success/failure panel for details.",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 19 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
+          "min": 0,
+          "max": 1,
           "custom": { "drawStyle": "line", "fillOpacity": 10 },
           "thresholds": {
             "mode": "absolute",
@@ -162,16 +164,22 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(http_server_request_duration_seconds_count{http_route=~\"/onepagecheckout/|/checkout/.*\", http_response_status_code=~\"5..\"}[5m])) / sum(rate(http_server_request_duration_seconds_count{http_route=~\"/onepagecheckout/|/checkout/.*\"}[5m]))",
-          "legendFormat": "Error rate"
+          "expr": "sum(rate(nopcommerce_checkout_orders_completed_total{status=\"failure\"}[5m])) / sum(rate(nopcommerce_checkout_orders_completed_total[5m]))",
+          "legendFormat": "error rate"
         }
       ]
+    },
+    {
+      "title": "Traces",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 },
+      "collapsed": false
     },
     {
       "title": "Checkout Flow Traces",
       "description": "Distributed traces for the checkout flow. Click a trace to see the full span hierarchy from HTTP entry point through payment, inventory, and event dispatch.",
       "type": "table",
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 27 },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 28 },
       "datasource": { "type": "tempo", "uid": "tempo" },
       "targets": [
         {
@@ -187,7 +195,7 @@
   ],
   "title": "nopCommerce Checkout Flow",
   "uid": "nopcommerce-checkout",
-  "version": 3,
+  "version": 4,
   "time": { "from": "now-1h", "to": "now" },
   "refresh": "10s"
 }

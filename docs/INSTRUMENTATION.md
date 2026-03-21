@@ -51,7 +51,7 @@ Each span will carry:
 
 **Implementation approach:**
 
-1. **OpenTelemetry SDK setup.** The OpenTelemetry SDK must be configured before any spans or metrics can be collected. An `INopStartup` implementation (`OpenTelemetryStartup` in Nop.Web.Framework) registers the SDK with the DI container, subscribing to our custom `ActivitySource` and `Meter`. It also adds ASP.NET Core auto-instrumentation for HTTP request spans. The console exporter is used for development; in production this would be replaced with an OTLP exporter targeting Jaeger, Zipkin, or a similar backend. This startup runs at `Order => 5`, early enough to capture the full request lifecycle.
+1. **OpenTelemetry SDK setup.** The OpenTelemetry SDK must be configured before any spans or metrics can be collected. An `INopStartup` implementation (`OpenTelemetryStartup` in Nop.Web.Framework) registers the SDK with the DI container, subscribing to our custom `ActivitySource` and `Meter`. It also adds ASP.NET Core auto-instrumentation for HTTP request spans. The console exporter is used for development; in production this would be replaced with an OTLP exporter targeting Tempo, Zipkin, or a similar backend. This startup runs at `Order => 5`, early enough to capture the full request lifecycle.
 
 2. **Instrumentation definitions.** A static class `NopInstrumentation` in Nop.Core defines the shared `ActivitySource` and `Meter` with all metric instruments. Placed in Nop.Core so that all outer layers can reference it without adding new dependencies (consistent with the onion architecture principle described in `ARCHITECTURE.md`).
 

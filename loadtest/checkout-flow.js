@@ -6,22 +6,11 @@ const BASE_URL = 'http://nopcommerce:80';
 export const options = {
     stages: [
         { duration: '30s', target: 50 },  // ramp up to 50 concurrent users
-        { duration: '4m',  target: 50 },  // hold at 50 users — one VU per account
+        { duration: '4m',  target: 50 },  // hold at 50 users
         { duration: '30s', target: 0 },   // ramp down
     ],
     gracefulRampDown: '30s',  // let in-flight iterations finish before killing VUs
 };
-
-// 5 sample-data accounts + 45 load-test accounts (all password: 123456).
-// Each VU gets its own account (1:1) to avoid shopping cart race conditions.
-const USERS = [
-    'steve_gates@nopCommerce.com',
-    'brenda_lindgren@nopCommerce.com',
-    'victoria_victoria@nopCommerce.com',
-    'arthur_holmes@nopCommerce.com',
-    'james_pan@nopCommerce.com',
-    ...Array.from({ length: 45 }, (_, i) => `loadtest${i + 1}@nopCommerce.com`),
-];
 
 // Extract anti-forgery token from HTML response
 function getToken(html) {
@@ -30,29 +19,15 @@ function getToken(html) {
 }
 
 export default function () {
-    // Each VU uses a different user to avoid cart collisions
-    const email = USERS[(__VU - 1) % USERS.length];
+    // Each VU checks out as a guest — no login required.
+    const guestEmail = `guest_vu${__VU}_${__ITER}@loadtest.com`;
 
     // 1. Load homepage
     let res = http.get(`${BASE_URL}/`, { redirects: 5 });
 
-    // 2. Login
-    res = http.get(`${BASE_URL}/login`);
-    let token = getToken(res.body);
-
-    res = http.post(`${BASE_URL}/login`, {
-        Email: email,
-        Password: '123456',
-        '__RequestVerificationToken': token,
-    }, { redirects: 5 });
-
-    check(res, {
-        'login successful': (r) => r.status === 200 && !r.body.includes('Login was unsuccessful'),
-    });
-
-    // 3. Add a product to cart (product ID 1 = "Build your own computer" in sample data)
+    // 2. Add a product to cart (product ID 1 = "Build your own computer" in sample data)
     res = http.get(`${BASE_URL}/build-your-own-computer`);
-    token = getToken(res.body);
+    let token = getToken(res.body);
 
     res = http.post(`${BASE_URL}/addproducttocart/details/1/1`, {
         'product_attribute_1': '1',    // Processor: 2.2 GHz Intel Pentium
@@ -73,7 +48,7 @@ export default function () {
         },
     });
 
-    // 4. Set gift wrapping (required checkout attribute) on the cart
+    // 3. Set gift wrapping (required checkout attribute) on the cart
     res = http.get(`${BASE_URL}/cart`);
     token = getToken(res.body);
 
@@ -84,16 +59,16 @@ export default function () {
         headers: { 'X-Requested-With': 'XMLHttpRequest' },
     });
 
-    // 5. Load one-page checkout
+    // 4. Load one-page checkout
     res = http.get(`${BASE_URL}/onepagecheckout`, { redirects: 5 });
     token = getToken(res.body);
 
-    // 6. OPC: Save billing address (submit new address to avoid ID conflicts)
+    // 5. OPC: Save billing address
     res = http.post(`${BASE_URL}/checkout/OpcSaveBilling/`, {
         'billing_address_id': '0',
         'BillingNewAddress.FirstName': 'Load',
         'BillingNewAddress.LastName': 'Test',
-        'BillingNewAddress.Email': email,
+        'BillingNewAddress.Email': guestEmail,
         'BillingNewAddress.CountryId': '1',
         'BillingNewAddress.StateProvinceId': '40',
         'BillingNewAddress.City': 'New York',
@@ -114,12 +89,12 @@ export default function () {
         },
     });
 
-    // 7. OPC: Save shipping address (use same as billing = submit new)
+    // 6. OPC: Save shipping address
     res = http.post(`${BASE_URL}/checkout/OpcSaveShipping/`, {
         'shipping_address_id': '0',
         'ShippingNewAddress.FirstName': 'Load',
         'ShippingNewAddress.LastName': 'Test',
-        'ShippingNewAddress.Email': email,
+        'ShippingNewAddress.Email': guestEmail,
         'ShippingNewAddress.CountryId': '1',
         'ShippingNewAddress.StateProvinceId': '40',
         'ShippingNewAddress.City': 'New York',
@@ -137,7 +112,7 @@ export default function () {
         },
     });
 
-    // 8. OPC: Save shipping method (Ground shipping)
+    // 7. OPC: Save shipping method (Ground shipping)
     res = http.post(`${BASE_URL}/checkout/OpcSaveShippingMethod/`, {
         'shippingoption': 'Ground___Shipping.FixedByWeightByTotal',
         '__RequestVerificationToken': token,
@@ -151,7 +126,7 @@ export default function () {
         },
     });
 
-    // 9. OPC: Save payment method (Check/Money Order)
+    // 8. OPC: Save payment method (Check/Money Order)
     res = http.post(`${BASE_URL}/checkout/OpcSavePaymentMethod/`, {
         'paymentmethod': 'Payments.CheckMoneyOrder',
         '__RequestVerificationToken': token,
@@ -168,7 +143,7 @@ export default function () {
         },
     });
 
-    // 10. OPC: Save payment info (no extra info needed for Check/Money Order)
+    // 9. OPC: Save payment info (no extra info needed for Check/Money Order)
     res = http.post(`${BASE_URL}/checkout/OpcSavePaymentInfo/`, {
         '__RequestVerificationToken': token,
     }, {
@@ -181,7 +156,7 @@ export default function () {
         },
     });
 
-    // 11. OPC: Confirm order - THIS is where our instrumentation fires
+    // 10. OPC: Confirm order - THIS is where our instrumentation fires
     res = http.post(`${BASE_URL}/checkout/OpcConfirmOrder/`, {
         '__RequestVerificationToken': token,
     }, {
@@ -197,7 +172,6 @@ export default function () {
         },
     });
 
-    // Shorter think time to compensate for fewer VUs while keeping
-    // enough concurrency for the in-flight gauge to show real overlap.
+    // Think time between iterations to maintain realistic concurrency
     sleep(2);
 }
