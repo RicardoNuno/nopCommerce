@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Nop.Core.Infrastructure;
 using Nop.Core.Infrastructure.Instrumentation;
+using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -31,7 +32,8 @@ public partial class OpenTelemetryStartup : INopStartup
                 .AddOtlpExporter(opts =>
                 {
                     opts.Endpoint = new System.Uri(
-                        configuration["OpenTelemetry:TracesEndpoint"] ?? "http://jaeger:4317");
+                        configuration["OpenTelemetry:TracesEndpoint"] ?? "http://tempo:4317");
+                    opts.Protocol = OtlpExportProtocol.Grpc;
                 })
                 .AddConsoleExporter())
             .WithMetrics(metrics => metrics

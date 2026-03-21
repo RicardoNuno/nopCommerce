@@ -74,9 +74,9 @@ The order flow was walked through stage by stage, asking at each point: "what ca
 
 **Metric 1: Orders completed (counter)**
 
-- **What:** A counter incremented when `PlaceOrderAsync()` finishes, tagged by `status` (success/failure) and `failure_reason` (on failure).
+- **What:** A counter incremented when `PlaceOrderAsync()` finishes, tagged by `status` (success/failure).
 - **Why:** This is the primary on-call signal. An operator's first question during an incident is "are orders going through?", and today there is no way to answer that without querying the database. HTTP-level error rates miss business failures (payment declined, validation failed, insufficient stock) because these return HTTP 200 with an error in the response body. This counter captures every outcome at the business level. Under load, a rising `status=failure` rate with a specific `failure_reason` gives the operator immediate triage direction. A dropping `status=success` rate is the clearest possible signal that checkout is broken.
-- **Implementation:** At the end of `PlaceOrderAsync()`, after both the locked and unlocked paths converge, increment the counter with `status=success` or `status=failure`. On failure, the first error message from `PlaceOrderResult.Errors` is attached as `failure_reason` to enable filtering by failure type (e.g., payment errors vs validation errors vs rate-limiting). This runs inside a `try/finally` block that also decrements the in-flight gauge (Metric 2), ensuring both metrics are recorded even if an unexpected exception propagates.
+- **Implementation:** At the end of `PlaceOrderAsync()`, after both the locked and unlocked paths converge, increment the counter with `status=success` or `status=failure`. The specific failure reason is available in the trace span and application logs for drill-down. This runs inside a `try/finally` block that also decrements the in-flight gauge (Metric 2), ensuring both metrics are recorded even if an unexpected exception propagates.
 
 **Metric 2: Orders in flight (up-down counter)**
 

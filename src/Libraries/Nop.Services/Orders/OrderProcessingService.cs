@@ -1588,7 +1588,6 @@ public partial class OrderProcessingService : IOrderProcessingService
     public virtual async Task<PlaceOrderResult> PlaceOrderAsync(ProcessPaymentRequest processPaymentRequest)
     {
         using var orderActivity = NopInstrumentation.ActivitySource.StartActivity("order.place");
-        NopInstrumentation.OrdersInFlight.Add(1);
 
         ArgumentNullException.ThrowIfNull(processPaymentRequest);
 
@@ -1678,6 +1677,7 @@ public partial class OrderProcessingService : IOrderProcessingService
             return result;
         }
 
+        NopInstrumentation.OrdersInFlight.Add(1);
         try
         {
             PlaceOrderResult orderResult;
@@ -1733,8 +1733,7 @@ public partial class OrderProcessingService : IOrderProcessingService
             else
             {
                 NopInstrumentation.OrdersCompleted.Add(1,
-                    new KeyValuePair<string, object?>("status", "failure"),
-                    new KeyValuePair<string, object?>("failure_reason", orderResult.Errors.FirstOrDefault() ?? "unknown"));
+                    new KeyValuePair<string, object?>("status", "failure"));
             }
 
             return orderResult;

@@ -17,7 +17,7 @@ public static class NopInstrumentation
 
     /// <summary>
     /// Metric 1: Orders completed (counter).
-    /// Incremented when PlaceOrderAsync() finishes, tagged by success/failure and failure reason.
+    /// Incremented when PlaceOrderAsync() finishes, tagged by success/failure.
     /// This is the primary on-call signal: "are orders going through?"
     /// </summary>
     public static readonly Counter<long> OrdersCompleted =

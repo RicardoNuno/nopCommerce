@@ -7,10 +7,16 @@
   "links": [],
   "panels": [
     {
+      "title": "Is checkout working?",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false
+    },
+    {
       "title": "Orders Completed (success / failure)",
-      "description": "Metric 1: Rate of completed orders by outcome. The primary on-call signal — a rising failure rate or dropping success rate means checkout is broken. Tagged by failure_reason for immediate triage.",
+      "description": "Metric 1: Rate of completed orders by outcome. A rising failure rate or dropping success rate means checkout is broken. Drill into traces for specific failure reasons.",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -41,9 +47,9 @@
     },
     {
       "title": "Orders In Flight",
-      "description": "Metric 2: Number of orders currently being processed. A rising value under load indicates saturation — orders are piling up faster than they complete.",
+      "description": "Metric 2: Number of orders currently being processed. A rising value under load means orders are piling up faster than they complete.",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -69,10 +75,16 @@
       ]
     },
     {
+      "title": "Where is time being spent?",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "collapsed": false
+    },
+    {
       "title": "Payment Gateway Latency (p50 / p95 / p99)",
-      "description": "Metric 3: Duration of payment gateway calls during checkout. A climbing p95 indicates the payment provider is degrading before users see timeouts.",
+      "description": "Metric 3: Duration of payment gateway calls. A climbing p95 indicates the payment provider is degrading before users see timeouts.",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -100,7 +112,7 @@
       "title": "Event Dispatch Duration (OrderPlacedEvent)",
       "description": "Metric 4: Time spent dispatching OrderPlacedEvent to all consumers. A climbing value means a consumer is slowing down the checkout response.",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -121,10 +133,16 @@
       ]
     },
     {
-      "title": "Checkout Error Rate",
-      "description": "Percentage of checkout HTTP requests that resulted in an error (5xx responses). Derived from ASP.NET Core auto-instrumentation.",
+      "title": "HTTP-level errors and traces",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "collapsed": false
+    },
+    {
+      "title": "Checkout Error Rate (HTTP 5xx)",
+      "description": "Percentage of checkout HTTP requests returning 5xx. Complements the business-level Orders Completed panel: this catches infrastructure failures (app crashes, timeouts), while Orders Completed catches business failures (payment declined, validation errors).",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 19 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -152,20 +170,24 @@
     {
       "title": "Checkout Flow Traces",
       "description": "Distributed traces for the checkout flow. Click a trace to see the full span hierarchy from HTTP entry point through payment, inventory, and event dispatch.",
-      "type": "traces",
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 24 },
-      "datasource": { "type": "jaeger", "uid": "jaeger" },
+      "type": "table",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 27 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
       "targets": [
         {
-          "query": "NopCommerce.Checkout",
-          "service": "NopCommerce"
+          "refId": "A",
+          "queryType": "traceql",
+          "query": "{resource.service.name = \"NopCommerce\" && name = \"order.place\"}",
+          "limit": 20,
+          "tableType": "traces",
+          "datasource": { "type": "tempo", "uid": "tempo" }
         }
       ]
     }
   ],
   "title": "nopCommerce Checkout Flow",
   "uid": "nopcommerce-checkout",
-  "version": 2,
+  "version": 3,
   "time": { "from": "now-1h", "to": "now" },
   "refresh": "10s"
 }

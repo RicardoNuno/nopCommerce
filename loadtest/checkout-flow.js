@@ -6,25 +6,21 @@ const BASE_URL = 'http://nopcommerce:80';
 export const options = {
     stages: [
         { duration: '30s', target: 50 },  // ramp up to 50 concurrent users
-        { duration: '4m',  target: 50 },  // hold at 50 users (5 VUs per sample account)
+        { duration: '4m',  target: 50 },  // hold at 50 users — one VU per account
         { duration: '30s', target: 0 },   // ramp down
     ],
+    gracefulRampDown: '30s',  // let in-flight iterations finish before killing VUs
 };
 
-// nopCommerce sample data users (all have password 123456).
-// 10 accounts allow 20 VUs (2 per account) to sustain ~1 order per user per minute
-// while keeping enough concurrency for the in-flight gauge to register.
+// 5 sample-data accounts + 45 load-test accounts (all password: 123456).
+// Each VU gets its own account (1:1) to avoid shopping cart race conditions.
 const USERS = [
     'steve_gates@nopCommerce.com',
     'brenda_lindgren@nopCommerce.com',
     'victoria_victoria@nopCommerce.com',
     'arthur_holmes@nopCommerce.com',
     'james_pan@nopCommerce.com',
-    'philip_cardenas@nopCommerce.com',
-    'laura_stuart@nopCommerce.com',
-    'monica_mccarthy@nopCommerce.com',
-    'todd_bauer@nopCommerce.com',
-    'kevin_watkins@nopCommerce.com',
+    ...Array.from({ length: 45 }, (_, i) => `loadtest${i + 1}@nopCommerce.com`),
 ];
 
 // Extract anti-forgery token from HTML response
@@ -201,9 +197,7 @@ export default function () {
         },
     });
 
-    // Think time between iterations. With 20 VUs across 10 accounts,
-    // the natural stagger from ramp-up plus the checkout step duration (~5-10s)
-    // keeps each account under the 1-minute rate limit while maintaining
+    // Shorter think time to compensate for fewer VUs while keeping
     // enough concurrency for the in-flight gauge to show real overlap.
-    sleep(15);
+    sleep(2);
 }
