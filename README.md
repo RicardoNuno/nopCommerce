@@ -1,13 +1,8 @@
-﻿﻿nopCommerce: free and open-source eCommerce solution
-===========
+﻿﻿# nopCommerce — Order Placement Instrumentation
 
-[nopCommerce](https://www.nopcommerce.com/?utm_source=github&utm_medium=content&utm_campaign=homepage) is the best open-source eCommerce platform. nopCommerce is free, and it is the most popular ASP.NET Core shopping cart.
+> Fork of [nopCommerce](https://github.com/nopSolutions/nopCommerce), a production-grade open-source ASP.NET Core e-commerce platform. This fork adds OpenTelemetry tracing, custom metrics, and a Grafana dashboard to the checkout flow as part of an observability assignment.
 
----
-
-## Observability Assignment — Order Placement Instrumentation
-
-This fork adds OpenTelemetry tracing and metrics to the **order placement flow** (checkout → payment → inventory → event dispatch). The instrumentation covers the full path from the HTTP entry point in `CheckoutController` through the service layer in `OrderProcessingService`.
+This fork adds OpenTelemetry tracing and metrics to the **order placement flow**. The instrumentation covers the full path from the HTTP entry point in `CheckoutController` through the service layer in `OrderProcessingService`.
 
 ### Instrumented Flow
 
