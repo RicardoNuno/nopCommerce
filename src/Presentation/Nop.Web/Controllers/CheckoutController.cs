@@ -2027,6 +2027,8 @@ public partial class CheckoutController : BasePublicController
     [HttpPost]
     public virtual async Task<IActionResult> OpcConfirmOrder(bool captchaValid)
     {
+        using var activity = NopInstrumentation.ActivitySource.StartActivity("checkout.confirm");
+
         try
         {
             var customer = await _workContext.GetCurrentCustomerAsync();

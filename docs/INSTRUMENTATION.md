@@ -8,10 +8,11 @@ This flow was chosen because it is the most operationally critical path in the a
 
 ## Flow Overview
 
-When a customer confirms an order, the request enters through `CheckoutController.ConfirmOrder()` and is orchestrated by `OrderProcessingService.PlaceOrderAsync()`. The chain is as follows:
+When a customer confirms an order, the request enters through one of two endpoints in `CheckoutController` — `ConfirmOrder()` (multi-page checkout) or `OpcConfirmOrder()` (one-page checkout). Both are instrumented with the same `checkout.confirm` span and both delegate to `OrderProcessingService.PlaceOrderAsync()`. The chain is as follows:
 
 ```
-CheckoutController.ConfirmOrder()                    [Nop.Web]
+CheckoutController                                    [Nop.Web]
+  ConfirmOrder() / OpcConfirmOrder()                  ← span: checkout.confirm
   └─ OrderProcessingService.PlaceOrderAsync()         [Nop.Services]
        ├─ PreparePlaceOrderDetailsAsync()
        │    ├─ Validate customer, cart, addresses
@@ -37,7 +38,7 @@ nopCommerce has no existing tracing infrastructure (no `System.Diagnostics.Activ
 
 | Span | Location | What it captures |
 |------|----------|-----------------|
-| `checkout.confirm` | `CheckoutController.ConfirmOrder()` | Business-level span for checkout (child of the auto-generated ASP.NET Core HTTP span) |
+| `checkout.confirm` | `CheckoutController.ConfirmOrder()` and `OpcConfirmOrder()` | Business-level span for checkout (child of the auto-generated ASP.NET Core HTTP span). Both the multi-page and one-page checkout paths are instrumented |
 | `order.place` | `OrderProcessingService.PlaceOrderAsync()` | The orchestration of the full order pipeline |
 | `order.validate_totals` | `PrepareAndValidateTotalsAsync()` | Discount validation, tax calculation, totals |
 | `payment.process` | `GetProcessPaymentResultAsync()` | Payment gateway call (the main external dependency) |
@@ -51,7 +52,7 @@ Each span will carry:
 
 **Implementation approach:**
 
-1. **OpenTelemetry SDK setup.** The OpenTelemetry SDK must be configured before any spans or metrics can be collected. An `INopStartup` implementation (`OpenTelemetryStartup` in Nop.Web.Framework) registers the SDK with the DI container, subscribing to our custom `ActivitySource` and `Meter`. It also adds ASP.NET Core auto-instrumentation for HTTP request spans. The console exporter is used for development; in production this would be replaced with an OTLP exporter targeting Tempo, Zipkin, or a similar backend. This startup runs at `Order => 5`, early enough to capture the full request lifecycle.
+1. **OpenTelemetry SDK setup.** The OpenTelemetry SDK must be configured before any spans or metrics can be collected. An `INopStartup` implementation (`OpenTelemetryStartup` in Nop.Web.Framework) registers the SDK with the DI container, subscribing to our custom `ActivitySource` and `Meter`. It also adds ASP.NET Core auto-instrumentation for HTTP request spans. The OTLP exporter sends traces to Tempo via gRPC; a console exporter is also enabled alongside it for development visibility. This startup runs at `Order => 5`, early enough to capture the full request lifecycle.
 
 2. **Instrumentation definitions.** A static class `NopInstrumentation` in Nop.Core defines the shared `ActivitySource` and `Meter` with all metric instruments. Placed in Nop.Core so that all outer layers can reference it without adding new dependencies (consistent with the onion architecture principle described in `ARCHITECTURE.md`).
 

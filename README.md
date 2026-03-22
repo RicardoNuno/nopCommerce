@@ -12,7 +12,8 @@ This fork adds OpenTelemetry tracing and metrics to the **order placement flow**
 ### Instrumented Flow
 
 ```
-CheckoutController.ConfirmOrder()                    [Nop.Web]
+CheckoutController                                    [Nop.Web]
+  ConfirmOrder() / OpcConfirmOrder()                  ← span: checkout.confirm
   └─ OrderProcessingService.PlaceOrderAsync()         [Nop.Services]
        ├─ PreparePlaceOrderDetailsAsync()
        │    └─ PrepareAndValidateTotalsAsync()         ← span: order.validate_totals
@@ -22,9 +23,54 @@ CheckoutController.ConfirmOrder()                    [Nop.Web]
        └─ Publish OrderPlacedEvent                     ← metric: event dispatch duration
 ```
 
-### Architecture Diagram
+### Instrumented Flow Architecture
 
-![nopCommerce Instrumented Architecture](docs/nopCommerceArchitecture.png)
+```mermaid
+graph TB
+    HTTP["HTTP Request<br/>POST /checkout/confirm<br/>POST /checkout/OpcConfirmOrder"] --> CCtrl
+
+    subgraph NOP["nopCommerce .NET"]
+
+        subgraph Framework["Nop.Web.Framework"]
+            OTelCfg["OpenTelemetryStartup<br/>Configures OTel SDK pipeline"]
+            AutoInstr["ASP.NET Core Auto-Instrumentation<br/>HTTP spans + request metrics"]
+        end
+
+        subgraph Web["Nop.Web"]
+            CCtrl["CheckoutController"]
+        end
+
+        subgraph Services["Nop.Services"]
+            OPlace["OrderProcessingService"]
+        end
+
+        subgraph Core["Nop.Core — NopInstrumentation"]
+            AS["ActivitySource<br/>NopCommerce.Checkout"]
+            MT["Meter<br/>NopCommerce.Checkout"]
+        end
+
+        CCtrl --> OPlace
+        CCtrl -.->|"creates span"| AS
+        OPlace -.->|"creates spans"| AS
+        OPlace -.->|"records metrics"| MT
+
+    end
+
+    AS -->|"OTel SDK<br/>OTLP gRPC"| Tempo
+    MT -->|"OTel SDK<br/>Prometheus scrape"| Prometheus
+
+    subgraph Backends["Observability Backends"]
+        Tempo["Tempo<br/>Trace backend<br/>:3200 / :4317"]
+        Prometheus["Prometheus<br/>Metrics backend<br/>:9090"]
+    end
+
+    Tempo --> Grafana
+    Prometheus --> Grafana
+
+    subgraph Dashboard["Visualization"]
+        Grafana["Grafana :3000<br/>Order rates · In-flight gauge<br/>Payment p95 · Error rate<br/>Trace view"]
+    end
+```
 
 ### Custom Metrics
 
@@ -69,11 +115,26 @@ Open Grafana at http://localhost:3000. The **nopCommerce Checkout Flow** dashboa
 
 ### Run the Load Test
 
+The k6 service is excluded from `docker compose up` by default. Once all services are running and nopCommerce is fully loaded (verify by opening http://localhost in your browser), start the load test in a separate terminal:
+
 ```bash
 docker compose --profile loadtest up k6
 ```
 
 This runs a k6 script that simulates 50 concurrent users going through the full checkout flow for ~5 minutes. Metrics and traces will appear in Grafana within seconds.
+
+### Dashboard Under Load
+
+![Full Dashboard](docs/full_dashboard.png)
+
+| Panel | Screenshot |
+|-------|------------|
+| Orders Completed (success / failure) | ![Orders Completed](docs/metric1.png) |
+| Orders In Flight (saturation) | ![Orders In Flight](docs/metric2.png) |
+| Payment Gateway Latency | ![Payment Gateway Latency](docs/metric3.png) |
+| Event Dispatch Duration | ![Event Dispatch Duration](docs/metric4.png) |
+| Checkout Error Rate | ![Error Rate](docs/error_rate.png) |
+| Checkout Flow Traces | ![Traces](docs/traces.png) |
 
 ### Additional Documentation
 
