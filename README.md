@@ -1,4 +1,4 @@
-﻿﻿# nopCommerce — Order Placement Instrumentation
+﻿﻿# nopCommerce - Order Placement Instrumentation
 
 > Fork of [nopCommerce](https://github.com/nopSolutions/nopCommerce), a production-grade open-source ASP.NET Core e-commerce platform. This fork adds OpenTelemetry tracing, custom metrics, and a Grafana dashboard to the checkout flow as part of an observability assignment.
 
@@ -120,16 +120,16 @@ This runs a k6 script that simulates 50 concurrent users going through the full 
 
 ### Dashboard Under Load
 
-![Full Dashboard](docs/full_dashboard.png)
+![Full Dashboard](docs/screenshots/full_dashboard.png)
 
 | Panel | Screenshot |
 |-------|------------|
-| Orders Completed (success / failure) | ![Orders Completed](docs/metric1.png) |
-| Orders In Flight (saturation) | ![Orders In Flight](docs/metric2.png) |
-| Payment Gateway Latency | ![Payment Gateway Latency](docs/metric3.png) |
-| Event Dispatch Duration | ![Event Dispatch Duration](docs/metric4.png) |
-| Checkout Error Rate | ![Error Rate](docs/error_rate.png) |
-| Checkout Flow Traces | ![Traces](docs/traces.png) |
+| Orders Completed (success / failure) | ![Orders Completed](docs/screenshots/metric1.png) |
+| Orders In Flight (saturation) | ![Orders In Flight](docs/screenshots/metric2.png) |
+| Payment Gateway Latency | ![Payment Gateway Latency](docs/screenshots/metric3.png) |
+| Event Dispatch Duration | ![Event Dispatch Duration](docs/screenshots/metric4.png) |
+| Checkout Error Rate | ![Error Rate](docs/screenshots/error_rate.png) |
+| Checkout Flow Traces | ![Traces](docs/screenshots/traces.png) |
 
 ### Additional Documentation
 
@@ -150,7 +150,8 @@ Detailed analysis and documentation are available in the `docs/` directory:
 ├── docs/
 │   ├── ARCHITECTURE.md                      # Architecture analysis
 │   ├── INSTRUMENTATION.md                   # Instrumentation plan & metric justifications
-│   └── nopCommerceArchitecture.png          # Architecture diagram
+│   ├── nopCommerceArchitecture.png          # Architecture diagram
+│   └── screenshots/                         # Dashboard & metric screenshots
 ├── grafana/
 │   ├── dashboards/
 │   │   └── checkout-flow.json               # Exported Grafana dashboard
