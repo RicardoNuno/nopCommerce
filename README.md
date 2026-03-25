@@ -145,6 +145,7 @@ Detailed analysis and documentation are available in the `docs/` directory:
 ├── CRITIQUE.md                              # Architectural critique
 ├── docker-compose.yml                       # Full observability stack
 ├── prometheus.yml                           # Prometheus scrape config
+├── Presentation.pdf                         # Assignement I Presentation Slides
 ├── tempo.yml                                # Tempo trace backend config
 ├── Dockerfile                               # Multi-stage build
 ├── docs/
